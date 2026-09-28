@@ -489,7 +489,7 @@ def tr(key, **kw):
         return s
 
 
-# ==================== 语言映射（不变） ====================
+# ==================== 语言映射 ====================
 EXT_LANG_MAP = {
     '.py': 'python', '.pyw': 'python',
     '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
@@ -977,7 +977,7 @@ def restore_from_md(md_paths, target_dir: Path,
             'skipped': skipped, 'errors': errors}
 
 
-# ==================== AI 规范文件（保持中文版） ====================
+# ==================== AI 规范文件（中文版） ====================
 AI_GUIDE_MD = r'''# 文件夹 Markdown 格式规范（供 AI 参考）
 
 本文件规范一种 Markdown 格式，用于描述一个文件夹的完整内容。
@@ -1232,6 +1232,270 @@ print("hello world")
 - **子文件**：文件名形如 `<母文件名>_partNN.md`，
   内容为若干 `### N. \`path\`` 块（编号全局连续）。
   还原工具会自动发现并合并所有子文件。
+'''
+
+
+# ==================== AI 规范文件（英文版，供非中文界面使用） ====================
+AI_GUIDE_MD_EN = r'''# Folder Markdown Format Specification (for AI Reference)
+
+This document specifies a Markdown format that fully describes the contents
+of a folder. Any AI that follows this specification can produce output that
+users can feed into the "Folder <-> Markdown Converter" restore function to
+recreate the real folder structure and file contents.
+
+---
+
+## 1. Overall Structure
+
+The Markdown contains three sections in order, separated by `---`:
+
+```
+# Title and Metadata
+
+## 1. Tree
+(code block containing a directory tree)
+
+## 2. Contents
+### 1. `path/to/file1`
+(metadata + content)
+
+### 2. `path/to/file2`
+(metadata + content)
+```
+
+---
+
+## 2. Title and Metadata
+
+The file starts with a level-1 heading followed by a metadata list:
+
+```markdown
+# myproject
+
+- root: `/Users/me/myproject`
+- exported: 2026-01-01 12:00:00
+- files: 5
+- folders: 2
+- include_hidden: False
+- max_file_mb: 10.0
+- split_mb: 0
+```
+
+The restore process relies on each file block's path, not on the header.
+Header metadata is for human readers.
+
+---
+
+## 3. Tree (Recommended, Not Required)
+
+Under `## 1. Tree`, place a code block containing a `tree`-like directory
+structure. **The restore function does not rely on this section**, but it is
+recommended for readability.
+
+```text
+myproject/
+├── src/
+│   ├── main.py
+│   └── utils.py
+└── README.md
+```
+
+---
+
+## 4. File Content Blocks (Core)
+
+Under `## 2. Contents`, each file is represented by one block:
+
+### 4.1 Block Header (Mandatory)
+
+```markdown
+### N. `relative/path`
+```
+
+- `N` starts at 1 and increments globally.
+- The path inside backticks is **relative to the root folder**, using `/`.
+- The path must not be absolute and must not contain `..`.
+
+### 4.2 Metadata (Optional)
+
+```markdown
+- name: `main.py`
+- rel: `src/main.py`
+- abs: `/Users/me/myproject/src/main.py`
+- size: 1.23 KB
+```
+
+**Only the `### N. \`path\`` line is mandatory.** The restore process reads
+that line and the code block beneath it.
+
+### 4.3 Encoding Marker (Optional)
+
+If the file is not UTF-8, add an HTML comment:
+
+```markdown
+<!-- encoding: gbk -->
+```
+
+The Chinese form `<!-- 文件编码：gbk -->` is also accepted.
+
+### 4.4 Content (Mandatory)
+
+Wrap content in a **code fence** with at least 3 backticks:
+
+````markdown
+```python
+print("hello")
+```
+````
+
+The language tag (`python`, `js`, etc.) is optional and ignored by the
+restore process.
+**If the file content itself contains runs of backticks, the fence must be
+longer than the longest run.** For example, if the content has at most 3
+consecutive backticks, use at least 4 for the fence.
+
+### 4.5 Block Separator (Recommended)
+
+End each file block with a line containing `---`:
+
+```markdown
+### 1. `README.md`
+
+- name: `README.md`
+
+```text
+hello
+```
+
+---
+```
+
+---
+
+## 5. Binary and Oversized Files
+
+If a file is binary or too large, output a note instead of content:
+
+```markdown
+### 3. `logo.png`
+
+- name: `logo.png`
+- size: 12.34 KB
+
+> binary file, no content exported.
+
+---
+```
+
+During restore, such files are created as empty placeholders.
+
+---
+
+## 6. Complete Example
+
+````markdown
+# demo
+
+- root: `/tmp/demo`
+- exported: 2026-01-01 12:00:00
+- files: 2
+- folders: 1
+- include_hidden: False
+- max_file_mb: 10.0
+- split_mb: 0
+
+---
+
+## 1. Tree
+
+```
+demo/
+├── src/
+│   └── main.py
+└── README.md
+```
+
+---
+
+## 2. Contents
+
+### 1. `README.md`
+
+- name: `README.md`
+- rel: `README.md`
+- abs: `/tmp/demo/README.md`
+- size: 15 B
+
+<!-- encoding: utf-8 -->
+
+```text
+# Demo
+Hello, world!
+```
+
+---
+
+### 2. `src/main.py`
+
+- name: `main.py`
+- rel: `src/main.py`
+- abs: `/tmp/demo/src/main.py`
+- size: 20 B
+
+<!-- encoding: utf-8 -->
+
+```python
+print("hello world")
+```
+
+---
+````
+
+---
+
+## 7. AI Output Checklist
+
+- [ ] Top-level level-1 heading `# ...`
+- [ ] Contains a `## 2. Contents` section (or Chinese equivalent)
+- [ ] Each file starts with `### N. \`relative/path\``
+- [ ] `N` increments from 1 without gaps
+- [ ] Paths use forward slashes `/`, are not absolute, contain no `..`
+- [ ] Content is wrapped in a code fence (at least 3 backticks)
+- [ ] If the content contains backticks, the fence must be longer
+- [ ] Binary / oversized files use `> note` instead of content
+- [ ] Blocks are separated by `---`
+- [ ] **Do not wrap the entire document in a code block**
+
+---
+
+## 8. Common Mistakes
+
+| Mistake | Consequence | Fix |
+|---|---|---|
+| Missing `### N. \`path\`` | File will not be restored | Add the block header |
+| Absolute path | Rejected or path escape | Use a relative path |
+| Fence too short | Content is truncated | Use a longer fence |
+| Whole md wrapped in ``` | Cannot be parsed | Do not wrap the entire document |
+| No `---` between blocks | Usually fine, but less readable | Add `---` |
+| Path contains `..` | Rejected and skipped | Use a normal relative path |
+
+---
+
+## 9. Split Output (Optional)
+
+For very long content, split into one mother file and several parts:
+
+- **Mother file**: contains metadata, tree, and an index table:
+
+  ```markdown
+  | Part | Range | Count | Link |
+  |:---|:---|---:|:---|
+  | `xxx_part01.md` | 1 - 120 | 120 | [Open](./xxx_part01.md) |
+  ```
+
+- **Part files**: named `<mother_name>_partNN.md`, containing several
+  `### N. \`path\`` blocks (numbering is globally continuous).
+  The restore tool will auto-discover and merge all parts.
 '''
 
 
@@ -1591,7 +1855,6 @@ class App:
         self._build()
 
     def _build(self):
-        # 清空旧内容（语言切换时重建）
         for w in self.root.winfo_children():
             w.destroy()
 
@@ -1599,7 +1862,6 @@ class App:
         self.root.geometry("780x700")
         self.root.minsize(680, 600)
 
-        # 顶部工具条：语言 + AI 规范
         toolbar = ttk.Frame(self.root, padding=(12, 8, 12, 0))
         toolbar.pack(fill='x')
 
@@ -1616,7 +1878,6 @@ class App:
         ttk.Button(toolbar, text=tr('btn_gen_ai_guide'),
                    command=self.save_ai_guide).pack(side='right')
 
-        # 标签页
         nb = ttk.Notebook(self.root)
         nb.pack(fill='both', expand=True, padx=8, pady=8)
         self.export_tab = ExportTab(nb)
@@ -1633,16 +1894,24 @@ class App:
             self._build()
 
     def save_ai_guide(self):
+        # 中文界面 → 中文规范；其他语言 → 英文规范
+        if CURRENT_LANG == 'zh':
+            guide_text = AI_GUIDE_MD
+            default_name = 'AI输出规范_文件夹Markdown格式.md'
+        else:
+            guide_text = AI_GUIDE_MD_EN
+            default_name = 'AI_Guide_Folder_Markdown_Format.md'
+
         out = filedialog.asksaveasfilename(
             title=tr('dlg_save_guide_title'),
             defaultextension=".md",
-            initialfile=tr('default_guide_filename'),
+            initialfile=default_name,
             filetypes=[(tr('ft_md'), "*.md"), (tr('ft_all'), "*.*")],
         )
         if not out:
             return
         try:
-            Path(out).write_text(AI_GUIDE_MD, encoding='utf-8')
+            Path(out).write_text(guide_text, encoding='utf-8')
             messagebox.showinfo(tr('info_done_title'),
                                 tr('info_guide_saved', path=out))
         except Exception as e:
