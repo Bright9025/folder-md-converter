@@ -31,7 +31,7 @@ CURRENT_LANG = 'zh'
 TRANSLATIONS = {
     'zh': {
         'app_title': '文件夹 <-> Markdown 互转工具',
-        'lang_label': '语言：',
+        'lang_label': '🌐 语言：',
         'tab_export': '  导出（文件夹 → Markdown）  ',
         'tab_restore': '  还原（Markdown → 文件夹）  ',
         'btn_gen_ai_guide': '生成 AI 规范文件（指导其他 AI 输出格式）',
@@ -104,7 +104,7 @@ TRANSLATIONS = {
     },
     'en': {
         'app_title': 'Folder <-> Markdown Converter',
-        'lang_label': 'Language:',
+        'lang_label': '🌐 Language:',
         'tab_export': '  Export (Folder → Markdown)  ',
         'tab_restore': '  Restore (Markdown → Folder)  ',
         'btn_gen_ai_guide': 'Generate AI Guide (for other AI output format)',
@@ -179,7 +179,7 @@ TRANSLATIONS = {
     },
     'fr': {
         'app_title': 'Convertisseur Dossier <-> Markdown',
-        'lang_label': 'Langue :',
+        'lang_label': '🌐 Langue :',
         'tab_export': '  Exporter (Dossier → Markdown)  ',
         'tab_restore': '  Restaurer (Markdown → Dossier)  ',
         'btn_gen_ai_guide': 'Générer le guide IA (format de sortie pour autres IA)',
@@ -254,7 +254,7 @@ TRANSLATIONS = {
     },
     'es': {
         'app_title': 'Convertidor Carpeta <-> Markdown',
-        'lang_label': 'Idioma:',
+        'lang_label': '🌐 Idioma:',
         'tab_export': '  Exportar (Carpeta → Markdown)  ',
         'tab_restore': '  Restaurar (Markdown → Carpeta)  ',
         'btn_gen_ai_guide': 'Generar guía IA (formato para otras IA)',
@@ -329,7 +329,7 @@ TRANSLATIONS = {
     },
     'ru': {
         'app_title': 'Конвертер Папка <-> Markdown',
-        'lang_label': 'Язык:',
+        'lang_label': '🌐 Язык:',
         'tab_export': '  Экспорт (Папка → Markdown)  ',
         'tab_restore': '  Восстановление (Markdown → Папка)  ',
         'btn_gen_ai_guide': 'Создать ИИ-руководство (формат для других ИИ)',
@@ -404,7 +404,7 @@ TRANSLATIONS = {
     },
     'ar': {
         'app_title': 'محول المجلد <-> Markdown',
-        'lang_label': 'اللغة:',
+        'lang_label': '🌐 اللغة:',
         'tab_export': '  تصدير (مجلد → Markdown)  ',
         'tab_restore': '  استعادة (Markdown → مجلد)  ',
         'btn_gen_ai_guide': 'إنشاء دليل الذكاء الاصطناعي (لتنسيق مخرجات الذكاء الاصطناعي)',
@@ -1894,7 +1894,6 @@ class App:
             self._build()
 
     def save_ai_guide(self):
-        # 中文界面 → 中文规范；其他语言 → 英文规范
         if CURRENT_LANG == 'zh':
             guide_text = AI_GUIDE_MD
             default_name = 'AI输出规范_文件夹Markdown格式.md'
