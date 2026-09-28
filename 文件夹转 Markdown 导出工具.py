@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-文件夹 <-> Markdown 互转工具
-- 导出：文件夹 → Markdown（支持按大小拆分母文件 / 子文件）
-- 还原：Markdown（单个 / 母+子 / 多个） → 文件夹
-- 生成 AI 规范文件，供其他 AI 按格式输出
+文件夹 <-> Markdown 互转工具（多语言版）
+支持：简体中文 / English / Français / Español / Русский / العربية
 """
 
 import os
@@ -17,7 +15,481 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 
-# ==================== 语言映射 ====================
+# ==================== 多语言配置 ====================
+LANGS = [
+    ('zh', '简体中文'),
+    ('en', 'English'),
+    ('fr', 'Français'),
+    ('es', 'Español'),
+    ('ru', 'Русский'),
+    ('ar', 'العربية'),
+]
+LANG_BY_LABEL = {label: code for code, label in LANGS}
+LABEL_BY_LANG = {code: label for code, label in LANGS}
+CURRENT_LANG = 'zh'
+
+TRANSLATIONS = {
+    'zh': {
+        'app_title': '文件夹 <-> Markdown 互转工具',
+        'lang_label': '语言：',
+        'tab_export': '  导出（文件夹 → Markdown）  ',
+        'tab_restore': '  还原（Markdown → 文件夹）  ',
+        'btn_gen_ai_guide': '生成 AI 规范文件（指导其他 AI 输出格式）',
+        'lbl_target_folder': '目标文件夹：',
+        'btn_choose': '选择…',
+        'frame_options': '选项',
+        'chk_include_hidden': '包含隐藏文件 / 文件夹（以 . 开头）',
+        'lbl_max_size': '单文件内容大小上限（MB，0 = 不限制）：',
+        'lbl_split_size': '拆分阈值（MB，0 = 不拆分）：',
+        'lbl_split_hint': '超过阈值时生成母文件 + 若干子文件',
+        'btn_start_export': '开始导出',
+        'btn_cancel': '取消',
+        'frame_progress': '进度',
+        'status_ready': '就绪',
+        'dlg_save_mother_title': '保存母文件（Markdown）',
+        'ft_md': 'Markdown 文件',
+        'ft_all': '所有文件',
+        'lbl_restore_info': '选择由本工具导出的 Markdown 文件（可多选）。'
+                            '若选择母文件，将自动发现同目录下的所有子文件。',
+        'btn_choose_md': '选择 md 文件…',
+        'btn_clear_list': '清空列表',
+        'lbl_selected_count': '已选 {n} 个文件',
+        'frame_selected_files': '已选文件',
+        'lbl_restore_to': '还原到文件夹：',
+        'chk_auto_discover': '自动发现同目录下的子文件（母文件拆分场景）',
+        'btn_start_restore': '开始还原',
+        'dlg_choose_md_title': '选择要还原的 md 文件',
+        'dlg_choose_target_title': '选择还原到的文件夹',
+        'warn_title': '提示',
+        'warn_no_folder': '请先选择目标文件夹。',
+        'err_title': '错误',
+        'err_invalid_folder': '所选路径不是有效文件夹。',
+        'err_size_param': '大小参数必须是 ≥ 0 的数字。',
+        'warn_no_md': '请先选择要还原的 md 文件。',
+        'warn_no_target': '请选择还原到的目标文件夹。',
+        'confirm_title': '确认',
+        'confirm_overwrite': '将把 md 文件内容还原到：\n{path}\n\n'
+                             '同名文件会被覆盖，是否继续？',
+        'info_done_title': '完成',
+        'info_export_done': '导出完成！\n\n文件数：{files}\n'
+                            '文件夹数：{dirs}\n\n输出文件：\n{path}',
+        'info_export_done_split': '导出完成（已拆分）！\n\n文件数：{files}\n'
+                                  '文件夹数：{dirs}\n子文件数：{parts}\n\n'
+                                  '母文件：\n{path}',
+        'info_restore_done': '还原完成！\n\n目标文件夹：\n{path}\n\n'
+                             '写入文件数：{written} / {total}\n'
+                             '扫描 md 文件：{scanned} 个{skip}',
+        'err_export_failed': '导出失败：{err}',
+        'err_restore_failed': '还原失败：{err}',
+        'status_cancelling': '正在取消…',
+        'status_error': '发生错误',
+        'status_done_split': '完成：{files} 个文件 / {dirs} 个文件夹，'
+                             '拆分为 {parts} 个子文件',
+        'status_done': '完成：{files} 个文件，{dirs} 个文件夹',
+        'status_done_restore': '完成：写入 {written} / {total} 个文件',
+        'status_progress': '[{cur}/{total}] {name}',
+        'log_mother_file': '✅ 母文件：{path}',
+        'log_exported_to': '✅ 已导出到：{path}',
+        'log_restore_target': '✅ 还原目标：{path}',
+        'log_scanned_md': '   参与解析的 md 文件：',
+        'log_warn': '⚠ {msg}',
+        'log_skip': '⚠ 跳过：{msg}',
+        'log_branch': '   ├─ {path}',
+        'dlg_save_guide_title': '保存 AI 规范文件',
+        'info_guide_saved': 'AI 规范文件已保存：\n{path}\n\n'
+                            '把它发给其他 AI，它们就能按格式输出可还原的 Markdown。',
+        'err_guide_save_failed': '保存失败：{err}',
+        'default_guide_filename': 'AI输出规范_文件夹Markdown格式.md',
+        'skip_suffix': '，跳过 {n} 项',
+    },
+    'en': {
+        'app_title': 'Folder <-> Markdown Converter',
+        'lang_label': 'Language:',
+        'tab_export': '  Export (Folder → Markdown)  ',
+        'tab_restore': '  Restore (Markdown → Folder)  ',
+        'btn_gen_ai_guide': 'Generate AI Guide (for other AI output format)',
+        'lbl_target_folder': 'Target folder:',
+        'btn_choose': 'Choose…',
+        'frame_options': 'Options',
+        'chk_include_hidden': 'Include hidden files / folders (starting with .)',
+        'lbl_max_size': 'Max file content size (MB, 0 = no limit):',
+        'lbl_split_size': 'Split threshold (MB, 0 = no split):',
+        'lbl_split_hint': 'Split into mother file + parts when exceeded',
+        'btn_start_export': 'Start Export',
+        'btn_cancel': 'Cancel',
+        'frame_progress': 'Progress',
+        'status_ready': 'Ready',
+        'dlg_save_mother_title': 'Save mother file (Markdown)',
+        'ft_md': 'Markdown files',
+        'ft_all': 'All files',
+        'lbl_restore_info': 'Select Markdown files exported by this tool '
+                            '(multiple allowed). Selecting the mother file '
+                            'will auto-discover all parts in the same folder.',
+        'btn_choose_md': 'Choose md files…',
+        'btn_clear_list': 'Clear list',
+        'lbl_selected_count': '{n} file(s) selected',
+        'frame_selected_files': 'Selected files',
+        'lbl_restore_to': 'Restore to folder:',
+        'chk_auto_discover': 'Auto-discover parts in the same folder '
+                             '(mother file scenario)',
+        'btn_start_restore': 'Start Restore',
+        'dlg_choose_md_title': 'Choose md files to restore',
+        'dlg_choose_target_title': 'Choose target folder',
+        'warn_title': 'Notice',
+        'warn_no_folder': 'Please choose a target folder first.',
+        'err_title': 'Error',
+        'err_invalid_folder': 'Selected path is not a valid folder.',
+        'err_size_param': 'Size parameters must be numbers >= 0.',
+        'warn_no_md': 'Please choose md files to restore.',
+        'warn_no_target': 'Please choose a target folder.',
+        'confirm_title': 'Confirm',
+        'confirm_overwrite': 'Will restore md content to:\n{path}\n\n'
+                             'Existing files will be overwritten. Continue?',
+        'info_done_title': 'Done',
+        'info_export_done': 'Export complete!\n\nFiles: {files}\n'
+                            'Folders: {dirs}\n\nOutput file:\n{path}',
+        'info_export_done_split': 'Export complete (split)!\n\nFiles: {files}\n'
+                                  'Folders: {dirs}\nParts: {parts}\n\n'
+                                  'Mother file:\n{path}',
+        'info_restore_done': 'Restore complete!\n\nTarget folder:\n{path}\n\n'
+                             'Files written: {written} / {total}\n'
+                             'md files scanned: {scanned}{skip}',
+        'err_export_failed': 'Export failed: {err}',
+        'err_restore_failed': 'Restore failed: {err}',
+        'status_cancelling': 'Cancelling…',
+        'status_error': 'Error',
+        'status_done_split': 'Done: {files} files / {dirs} folders, '
+                             'split into {parts} parts',
+        'status_done': 'Done: {files} files, {dirs} folders',
+        'status_done_restore': 'Done: wrote {written} / {total} files',
+        'status_progress': '[{cur}/{total}] {name}',
+        'log_mother_file': '✅ Mother file: {path}',
+        'log_exported_to': '✅ Exported to: {path}',
+        'log_restore_target': '✅ Restore target: {path}',
+        'log_scanned_md': '   md files parsed:',
+        'log_warn': '⚠ {msg}',
+        'log_skip': '⚠ Skipped: {msg}',
+        'log_branch': '   ├─ {path}',
+        'dlg_save_guide_title': 'Save AI Guide',
+        'info_guide_saved': 'AI Guide saved:\n{path}\n\n'
+                            'Send it to other AIs so they can output a restorable Markdown.',
+        'err_guide_save_failed': 'Save failed: {err}',
+        'default_guide_filename': 'AI_Guide_Folder_Markdown_Format.md',
+        'skip_suffix': ', {n} skipped',
+    },
+    'fr': {
+        'app_title': 'Convertisseur Dossier <-> Markdown',
+        'lang_label': 'Langue :',
+        'tab_export': '  Exporter (Dossier → Markdown)  ',
+        'tab_restore': '  Restaurer (Markdown → Dossier)  ',
+        'btn_gen_ai_guide': 'Générer le guide IA (format de sortie pour autres IA)',
+        'lbl_target_folder': 'Dossier cible :',
+        'btn_choose': 'Choisir…',
+        'frame_options': 'Options',
+        'chk_include_hidden': 'Inclure les fichiers / dossiers cachés (commençant par .)',
+        'lbl_max_size': 'Taille max. par fichier (Mo, 0 = illimité) :',
+        'lbl_split_size': 'Seuil de fractionnement (Mo, 0 = aucun) :',
+        'lbl_split_hint': 'Génère un fichier mère + sous-fichiers si dépassé',
+        'btn_start_export': 'Lancer l\'export',
+        'btn_cancel': 'Annuler',
+        'frame_progress': 'Progression',
+        'status_ready': 'Prêt',
+        'dlg_save_mother_title': 'Enregistrer le fichier mère (Markdown)',
+        'ft_md': 'Fichiers Markdown',
+        'ft_all': 'Tous les fichiers',
+        'lbl_restore_info': 'Sélectionnez les fichiers Markdown exportés par cet outil '
+                            '(sélection multiple possible). En choisissant le fichier '
+                            'mère, les sous-fichiers du même dossier seront détectés.',
+        'btn_choose_md': 'Choisir les fichiers md…',
+        'btn_clear_list': 'Vider la liste',
+        'lbl_selected_count': '{n} fichier(s) sélectionné(s)',
+        'frame_selected_files': 'Fichiers sélectionnés',
+        'lbl_restore_to': 'Restaurer vers le dossier :',
+        'chk_auto_discover': 'Découvrir automatiquement les sous-fichiers '
+                             '(scénario fichier mère)',
+        'btn_start_restore': 'Lancer la restauration',
+        'dlg_choose_md_title': 'Choisir les fichiers md à restaurer',
+        'dlg_choose_target_title': 'Choisir le dossier cible',
+        'warn_title': 'Attention',
+        'warn_no_folder': 'Veuillez d\'abord choisir un dossier cible.',
+        'err_title': 'Erreur',
+        'err_invalid_folder': 'Le chemin sélectionné n\'est pas un dossier valide.',
+        'err_size_param': 'Les tailles doivent être des nombres >= 0.',
+        'warn_no_md': 'Veuillez choisir des fichiers md à restaurer.',
+        'warn_no_target': 'Veuillez choisir un dossier cible.',
+        'confirm_title': 'Confirmation',
+        'confirm_overwrite': 'Le contenu md sera restauré dans :\n{path}\n\n'
+                             'Les fichiers existants seront écrasés. Continuer ?',
+        'info_done_title': 'Terminé',
+        'info_export_done': 'Export terminé !\n\nFichiers : {files}\n'
+                            'Dossiers : {dirs}\n\nFichier de sortie :\n{path}',
+        'info_export_done_split': 'Export terminé (fractionné) !\n\n'
+                                  'Fichiers : {files}\nDossiers : {dirs}\n'
+                                  'Sous-fichiers : {parts}\n\nFichier mère :\n{path}',
+        'info_restore_done': 'Restauration terminée !\n\nDossier cible :\n{path}\n\n'
+                             'Fichiers écrits : {written} / {total}\n'
+                             'Fichiers md analysés : {scanned}{skip}',
+        'err_export_failed': 'Échec de l\'export : {err}',
+        'err_restore_failed': 'Échec de la restauration : {err}',
+        'status_cancelling': 'Annulation…',
+        'status_error': 'Erreur',
+        'status_done_split': 'Terminé : {files} fichiers / {dirs} dossiers, '
+                             'fractionné en {parts} parties',
+        'status_done': 'Terminé : {files} fichiers, {dirs} dossiers',
+        'status_done_restore': 'Terminé : {written} / {total} fichiers écrits',
+        'status_progress': '[{cur}/{total}] {name}',
+        'log_mother_file': '✅ Fichier mère : {path}',
+        'log_exported_to': '✅ Exporté vers : {path}',
+        'log_restore_target': '✅ Cible de restauration : {path}',
+        'log_scanned_md': '   fichiers md analysés :',
+        'log_warn': '⚠ {msg}',
+        'log_skip': '⚠ Ignoré : {msg}',
+        'log_branch': '   ├─ {path}',
+        'dlg_save_guide_title': 'Enregistrer le guide IA',
+        'info_guide_saved': 'Guide IA enregistré :\n{path}\n\n'
+                            'Envoyez-le à d\'autres IA pour qu\'elles produisent un Markdown restaurable.',
+        'err_guide_save_failed': 'Échec de l\'enregistrement : {err}',
+        'default_guide_filename': 'Guide_IA_Dossier_Markdown.md',
+        'skip_suffix': ', {n} ignorés',
+    },
+    'es': {
+        'app_title': 'Convertidor Carpeta <-> Markdown',
+        'lang_label': 'Idioma:',
+        'tab_export': '  Exportar (Carpeta → Markdown)  ',
+        'tab_restore': '  Restaurar (Markdown → Carpeta)  ',
+        'btn_gen_ai_guide': 'Generar guía IA (formato para otras IA)',
+        'lbl_target_folder': 'Carpeta destino:',
+        'btn_choose': 'Elegir…',
+        'frame_options': 'Opciones',
+        'chk_include_hidden': 'Incluir archivos / carpetas ocultos (que empiezan por .)',
+        'lbl_max_size': 'Tamaño máx. por archivo (MB, 0 = sin límite):',
+        'lbl_split_size': 'Umbral de división (MB, 0 = sin división):',
+        'lbl_split_hint': 'Genera archivo madre + subarchivos si se supera',
+        'btn_start_export': 'Iniciar exportación',
+        'btn_cancel': 'Cancelar',
+        'frame_progress': 'Progreso',
+        'status_ready': 'Listo',
+        'dlg_save_mother_title': 'Guardar archivo madre (Markdown)',
+        'ft_md': 'Archivos Markdown',
+        'ft_all': 'Todos los archivos',
+        'lbl_restore_info': 'Seleccione los archivos Markdown exportados por esta '
+                            'herramienta (se permite selección múltiple). Al elegir '
+                            'el archivo madre se detectarán los subarchivos del mismo directorio.',
+        'btn_choose_md': 'Elegir archivos md…',
+        'btn_clear_list': 'Vaciar lista',
+        'lbl_selected_count': '{n} archivo(s) seleccionado(s)',
+        'frame_selected_files': 'Archivos seleccionados',
+        'lbl_restore_to': 'Restaurar a la carpeta:',
+        'chk_auto_discover': 'Detectar automáticamente subarchivos '
+                             '(escenario archivo madre)',
+        'btn_start_restore': 'Iniciar restauración',
+        'dlg_choose_md_title': 'Elegir archivos md a restaurar',
+        'dlg_choose_target_title': 'Elegir carpeta destino',
+        'warn_title': 'Aviso',
+        'warn_no_folder': 'Primero elija una carpeta destino.',
+        'err_title': 'Error',
+        'err_invalid_folder': 'La ruta seleccionada no es una carpeta válida.',
+        'err_size_param': 'Los tamaños deben ser números >= 0.',
+        'warn_no_md': 'Elija archivos md para restaurar.',
+        'warn_no_target': 'Elija una carpeta destino.',
+        'confirm_title': 'Confirmar',
+        'confirm_overwrite': 'Se restaurará el contenido md en:\n{path}\n\n'
+                             'Los archivos existentes serán sobrescritos. ¿Continuar?',
+        'info_done_title': 'Hecho',
+        'info_export_done': '¡Exportación completada!\n\nArchivos: {files}\n'
+                            'Carpetas: {dirs}\n\nArchivo de salida:\n{path}',
+        'info_export_done_split': '¡Exportación completada (dividida)!\n\n'
+                                  'Archivos: {files}\nCarpetas: {dirs}\n'
+                                  'Subarchivos: {parts}\n\nArchivo madre:\n{path}',
+        'info_restore_done': '¡Restauración completada!\n\nCarpeta destino:\n{path}\n\n'
+                             'Archivos escritos: {written} / {total}\n'
+                             'Archivos md analizados: {scanned}{skip}',
+        'err_export_failed': 'Fallo en la exportación: {err}',
+        'err_restore_failed': 'Fallo en la restauración: {err}',
+        'status_cancelling': 'Cancelando…',
+        'status_error': 'Error',
+        'status_done_split': 'Hecho: {files} archivos / {dirs} carpetas, '
+                             'dividido en {parts} partes',
+        'status_done': 'Hecho: {files} archivos, {dirs} carpetas',
+        'status_done_restore': 'Hecho: {written} / {total} archivos escritos',
+        'status_progress': '[{cur}/{total}] {name}',
+        'log_mother_file': '✅ Archivo madre: {path}',
+        'log_exported_to': '✅ Exportado a: {path}',
+        'log_restore_target': '✅ Destino de restauración: {path}',
+        'log_scanned_md': '   archivos md analizados:',
+        'log_warn': '⚠ {msg}',
+        'log_skip': '⚠ Omitido: {msg}',
+        'log_branch': '   ├─ {path}',
+        'dlg_save_guide_title': 'Guardar guía IA',
+        'info_guide_saved': 'Guía IA guardada:\n{path}\n\n'
+                            'Envíela a otras IA para que produzcan un Markdown restaurable.',
+        'err_guide_save_failed': 'Fallo al guardar: {err}',
+        'default_guide_filename': 'Guia_IA_Carpeta_Markdown.md',
+        'skip_suffix': ', {n} omitidos',
+    },
+    'ru': {
+        'app_title': 'Конвертер Папка <-> Markdown',
+        'lang_label': 'Язык:',
+        'tab_export': '  Экспорт (Папка → Markdown)  ',
+        'tab_restore': '  Восстановление (Markdown → Папка)  ',
+        'btn_gen_ai_guide': 'Создать ИИ-руководство (формат для других ИИ)',
+        'lbl_target_folder': 'Целевая папка:',
+        'btn_choose': 'Выбрать…',
+        'frame_options': 'Параметры',
+        'chk_include_hidden': 'Включать скрытые файлы / папки (начинающиеся с .)',
+        'lbl_max_size': 'Макс. размер файла (МБ, 0 = без ограничений):',
+        'lbl_split_size': 'Порог разбиения (МБ, 0 = не разбивать):',
+        'lbl_split_hint': 'При превышении создаёт основной файл + части',
+        'btn_start_export': 'Начать экспорт',
+        'btn_cancel': 'Отмена',
+        'frame_progress': 'Прогресс',
+        'status_ready': 'Готов',
+        'dlg_save_mother_title': 'Сохранить основной файл (Markdown)',
+        'ft_md': 'Файлы Markdown',
+        'ft_all': 'Все файлы',
+        'lbl_restore_info': 'Выберите файлы Markdown, созданные этим инструментом '
+                            '(можно несколько). Если выбрать основной файл, '
+                            'части в той же папке будут найдены автоматически.',
+        'btn_choose_md': 'Выбрать md файлы…',
+        'btn_clear_list': 'Очистить список',
+        'lbl_selected_count': 'Выбрано файлов: {n}',
+        'frame_selected_files': 'Выбранные файлы',
+        'lbl_restore_to': 'Восстановить в папку:',
+        'chk_auto_discover': 'Автоматически находить части в той же папке '
+                             '(сценарий основного файла)',
+        'btn_start_restore': 'Начать восстановление',
+        'dlg_choose_md_title': 'Выбрать md файлы для восстановления',
+        'dlg_choose_target_title': 'Выбрать целевую папку',
+        'warn_title': 'Внимание',
+        'warn_no_folder': 'Сначала выберите целевую папку.',
+        'err_title': 'Ошибка',
+        'err_invalid_folder': 'Выбранный путь не является папкой.',
+        'err_size_param': 'Размеры должны быть числами >= 0.',
+        'warn_no_md': 'Выберите md файлы для восстановления.',
+        'warn_no_target': 'Выберите целевую папку.',
+        'confirm_title': 'Подтверждение',
+        'confirm_overwrite': 'Содержимое md будет восстановлено в:\n{path}\n\n'
+                             'Существующие файлы будут перезаписаны. Продолжить?',
+        'info_done_title': 'Готово',
+        'info_export_done': 'Экспорт завершён!\n\nФайлов: {files}\n'
+                            'Папок: {dirs}\n\nВыходной файл:\n{path}',
+        'info_export_done_split': 'Экспорт завершён (с разбиением)!\n\n'
+                                  'Файлов: {files}\nПапок: {dirs}\n'
+                                  'Частей: {parts}\n\nОсновной файл:\n{path}',
+        'info_restore_done': 'Восстановление завершено!\n\nЦелевая папка:\n{path}\n\n'
+                             'Записано файлов: {written} / {total}\n'
+                             'Просканировано md: {scanned}{skip}',
+        'err_export_failed': 'Ошибка экспорта: {err}',
+        'err_restore_failed': 'Ошибка восстановления: {err}',
+        'status_cancelling': 'Отмена…',
+        'status_error': 'Ошибка',
+        'status_done_split': 'Готово: {files} файлов / {dirs} папок, '
+                             'разбито на {parts} частей',
+        'status_done': 'Готово: {files} файлов, {dirs} папок',
+        'status_done_restore': 'Готово: записано {written} / {total} файлов',
+        'status_progress': '[{cur}/{total}] {name}',
+        'log_mother_file': '✅ Основной файл: {path}',
+        'log_exported_to': '✅ Экспортировано в: {path}',
+        'log_restore_target': '✅ Цель восстановления: {path}',
+        'log_scanned_md': '   просканированные md файлы:',
+        'log_warn': '⚠ {msg}',
+        'log_skip': '⚠ Пропущено: {msg}',
+        'log_branch': '   ├─ {path}',
+        'dlg_save_guide_title': 'Сохранить ИИ-руководство',
+        'info_guide_saved': 'ИИ-руководство сохранено:\n{path}\n\n'
+                            'Отправьте его другим ИИ, чтобы они могли выдать восстановимый Markdown.',
+        'err_guide_save_failed': 'Ошибка сохранения: {err}',
+        'default_guide_filename': 'AI_Guide_Folder_Markdown_RU.md',
+        'skip_suffix': ', пропущено {n}',
+    },
+    'ar': {
+        'app_title': 'محول المجلد <-> Markdown',
+        'lang_label': 'اللغة:',
+        'tab_export': '  تصدير (مجلد → Markdown)  ',
+        'tab_restore': '  استعادة (Markdown → مجلد)  ',
+        'btn_gen_ai_guide': 'إنشاء دليل الذكاء الاصطناعي (لتنسيق مخرجات الذكاء الاصطناعي)',
+        'lbl_target_folder': 'المجلد الهدف:',
+        'btn_choose': 'اختر…',
+        'frame_options': 'الخيارات',
+        'chk_include_hidden': 'تضمين الملفات / المجلدات المخفية (التي تبدأ بـ .)',
+        'lbl_max_size': 'الحد الأقصى لحجم الملف (ميجابايت، 0 = بلا حد):',
+        'lbl_split_size': 'عتبة التقسيم (ميجابايت، 0 = بلا تقسيم):',
+        'lbl_split_hint': 'ينشئ ملفًا رئيسيًا + ملفات فرعية عند التجاوز',
+        'btn_start_export': 'ابدأ التصدير',
+        'btn_cancel': 'إلغاء',
+        'frame_progress': 'التقدم',
+        'status_ready': 'جاهز',
+        'dlg_save_mother_title': 'حفظ الملف الرئيسي (Markdown)',
+        'ft_md': 'ملفات Markdown',
+        'ft_all': 'كل الملفات',
+        'lbl_restore_info': 'اختر ملفات Markdown المُصدَّرة بواسطة هذه الأداة '
+                            '(يُسمح باختيار متعدد). عند اختيار الملف الرئيسي '
+                            'سيتم اكتشاف الملفات الفرعية تلقائيًا.',
+        'btn_choose_md': 'اختر ملفات md…',
+        'btn_clear_list': 'مسح القائمة',
+        'lbl_selected_count': 'تم اختيار {n} ملف',
+        'frame_selected_files': 'الملفات المختارة',
+        'lbl_restore_to': 'الاستعادة إلى مجلد:',
+        'chk_auto_discover': 'اكتشاف الملفات الفرعية تلقائيًا في نفس المجلد '
+                             '(سيناريو الملف الرئيسي)',
+        'btn_start_restore': 'ابدأ الاستعادة',
+        'dlg_choose_md_title': 'اختر ملفات md للاستعادة',
+        'dlg_choose_target_title': 'اختر المجلد الهدف',
+        'warn_title': 'تنبيه',
+        'warn_no_folder': 'يرجى اختيار مجلد هدف أولاً.',
+        'err_title': 'خطأ',
+        'err_invalid_folder': 'المسار المختار ليس مجلدًا صالحًا.',
+        'err_size_param': 'يجب أن تكون الأحجام أرقامًا >= 0.',
+        'warn_no_md': 'يرجى اختيار ملفات md للاستعادة.',
+        'warn_no_target': 'يرجى اختيار مجلد هدف.',
+        'confirm_title': 'تأكيد',
+        'confirm_overwrite': 'سيتم استعادة محتوى md إلى:\n{path}\n\n'
+                             'سيتم استبدال الملفات الموجودة. هل تريد المتابعة؟',
+        'info_done_title': 'تم',
+        'info_export_done': 'اكتمل التصدير!\n\nالملفات: {files}\n'
+                            'المجلدات: {dirs}\n\nالملف الناتج:\n{path}',
+        'info_export_done_split': 'اكتمل التصدير (مع تقسيم)!\n\n'
+                                  'الملفات: {files}\nالمجلدات: {dirs}\n'
+                                  'الملفات الفرعية: {parts}\n\nالملف الرئيسي:\n{path}',
+        'info_restore_done': 'اكتملت الاستعادة!\n\nالمجلد الهدف:\n{path}\n\n'
+                             'الملفات المكتوبة: {written} / {total}\n'
+                             'ملفات md المفحوصة: {scanned}{skip}',
+        'err_export_failed': 'فشل التصدير: {err}',
+        'err_restore_failed': 'فشل الاستعادة: {err}',
+        'status_cancelling': 'جارٍ الإلغاء…',
+        'status_error': 'خطأ',
+        'status_done_split': 'تم: {files} ملف / {dirs} مجلد، '
+                             'مقسم إلى {parts} أجزاء',
+        'status_done': 'تم: {files} ملف، {dirs} مجلد',
+        'status_done_restore': 'تم: كتابة {written} / {total} ملف',
+        'status_progress': '[{cur}/{total}] {name}',
+        'log_mother_file': '✅ الملف الرئيسي: {path}',
+        'log_exported_to': '✅ تم التصدير إلى: {path}',
+        'log_restore_target': '✅ هدف الاستعادة: {path}',
+        'log_scanned_md': '   ملفات md المفحوصة:',
+        'log_warn': '⚠ {msg}',
+        'log_skip': '⚠ تم التخطي: {msg}',
+        'log_branch': '   ├─ {path}',
+        'dlg_save_guide_title': 'حفظ دليل الذكاء الاصطناعي',
+        'info_guide_saved': 'تم حفظ دليل الذكاء الاصطناعي:\n{path}\n\n'
+                            'أرسله إلى أنظمة ذكاء اصطناعي أخرى لتُخرج Markdown قابلًا للاستعادة.',
+        'err_guide_save_failed': 'فشل الحفظ: {err}',
+        'default_guide_filename': 'AI_Guide_Folder_Markdown_AR.md',
+        'skip_suffix': '، تم تخطي {n}',
+    },
+}
+
+
+def tr(key, **kw):
+    d = TRANSLATIONS.get(CURRENT_LANG) or TRANSLATIONS['zh']
+    s = d.get(key) or TRANSLATIONS['zh'].get(key) or key
+    try:
+        return s.format(**kw) if kw else s
+    except Exception:
+        return s
+
+
+# ==================== 语言映射（不变） ====================
 EXT_LANG_MAP = {
     '.py': 'python', '.pyw': 'python',
     '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
@@ -154,46 +626,44 @@ def count_dirs(root: Path, include_hidden: bool = False) -> int:
 
 
 # ==================== 导出：内容块 ====================
-def _build_header(root_dir: Path, total: int, dir_count: int,
-                  include_hidden: bool, max_size_mb: float,
-                  split_size_mb: float) -> str:
+def _build_header(root_dir, total, dir_count, include_hidden,
+                  max_size_mb, split_size_mb) -> str:
     s = []
-    s.append(f"# 文件夹内容导出：{root_dir.name}\n\n")
-    s.append(f"- **根目录**：`{root_dir}`\n")
-    s.append(f"- **导出时间**：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    s.append(f"- **文件总数**：{total}\n")
-    s.append(f"- **文件夹总数**：{dir_count}（不含根目录）\n")
-    s.append(f"- **包含隐藏项**：{'是' if include_hidden else '否'}\n")
-    s.append(f"- **单文件内容上限**：{'不限制' if not max_size_mb else f'{max_size_mb} MB'}\n")
-    s.append(f"- **拆分阈值**：{'不拆分' if not split_size_mb else f'{split_size_mb} MB'}\n\n")
+    s.append(f"# {root_dir.name}\n\n")
+    s.append(f"- root: `{root_dir}`\n")
+    s.append(f"- exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    s.append(f"- files: {total}\n")
+    s.append(f"- folders: {dir_count}\n")
+    s.append(f"- include_hidden: {include_hidden}\n")
+    s.append(f"- max_file_mb: {max_size_mb}\n")
+    s.append(f"- split_mb: {split_size_mb}\n\n")
     return "".join(s)
 
 
-def _file_block(idx: int, fpath: Path, rel: Path, size: int,
-                binary: bool, max_bytes: int) -> str:
+def _file_block(idx, fpath, rel, size, binary, max_bytes) -> str:
     out = []
     out.append(f"### {idx}. `{rel.as_posix()}`\n\n")
-    out.append(f"- 文件名：`{fpath.name}`\n")
-    out.append(f"- 相对路径：`{rel.as_posix()}`\n")
-    out.append(f"- 绝对路径：`{fpath}`\n")
-    out.append(f"- 文件大小：{human_size(size)}\n\n")
+    out.append(f"- name: `{fpath.name}`\n")
+    out.append(f"- rel: `{rel.as_posix()}`\n")
+    out.append(f"- abs: `{fpath}`\n")
+    out.append(f"- size: {human_size(size)}\n\n")
 
     if binary:
-        out.append("> 二进制文件，未导出内容。\n\n---\n\n")
+        out.append("> binary file, no content exported.\n\n---\n\n")
         return "".join(out)
     if max_bytes and size > max_bytes:
-        out.append(f"> 文件过大（{human_size(size)}），超过上限，未导出内容。\n\n---\n\n")
+        out.append(f"> file too large ({human_size(size)}), content skipped.\n\n---\n\n")
         return "".join(out)
 
     try:
         content, enc = read_text_file(fpath)
     except Exception as e:
-        out.append(f"> 读取失败：`{e}`\n\n---\n\n")
+        out.append(f"> read failed: `{e}`\n\n---\n\n")
         return "".join(out)
 
     lang = get_language(fpath)
     fence = safe_fence(content)
-    out.append(f"<!-- 文件编码：{enc} -->\n\n")
+    out.append(f"<!-- encoding: {enc} -->\n\n")
     out.append(f"{fence}{lang}\n")
     out.append(content)
     if not content.endswith('\n'):
@@ -203,13 +673,10 @@ def _file_block(idx: int, fpath: Path, rel: Path, size: int,
 
 
 # ==================== 导出主逻辑 ====================
-def generate_markdown(
-    root_dir: Path, out_path: Path,
-    include_hidden: bool = False,
-    max_size_mb: float = 10.0,
-    split_size_mb: float = 0.0,
-    progress_cb=None, cancel_event=None,
-) -> dict:
+def generate_markdown(root_dir, out_path,
+                      include_hidden=False, max_size_mb=10.0,
+                      split_size_mb=0.0,
+                      progress_cb=None, cancel_event=None) -> dict:
     root_dir = Path(root_dir).resolve()
     out_path = Path(out_path).resolve()
     max_bytes = int(max_size_mb * 1024 * 1024) if max_size_mb > 0 else 0
@@ -231,10 +698,8 @@ def generate_markdown(
             size = 0
         binary = is_binary_file(fpath)
         content_size = 260 if (binary or (max_bytes and size > max_bytes)) else size + 420
-        file_info.append({
-            'path': fpath, 'rel': rel, 'size': size,
-            'binary': binary, 'content_size': content_size,
-        })
+        file_info.append({'path': fpath, 'rel': rel, 'size': size,
+                          'binary': binary, 'content_size': content_size})
 
     tree_text = generate_tree(root_dir, include_hidden)
     header_text = _build_header(root_dir, total, dir_count,
@@ -248,21 +713,20 @@ def generate_markdown(
     parts_written = []
     part_meta = []
 
-    def _write_single(fp, with_index=False):
+    def _write_single(fp):
         fp.write(header_text)
-        fp.write("---\n\n## 一、目录结构\n\n```\n")
+        fp.write("---\n\n## 1. Tree\n\n```\n")
         fp.write(tree_text)
-        fp.write("\n```\n\n---\n\n## 二、文件内容\n\n")
+        fp.write("\n```\n\n---\n\n## 2. Contents\n\n")
         for idx, fi in enumerate(file_info, 1):
             if cancel_event and cancel_event.is_set():
-                fp.write("\n> ⚠️ 用户已取消导出，以下内容不完整。\n")
+                fp.write("\n> cancelled\n")
                 break
             if progress_cb:
                 progress_cb(idx, total, fi['rel'].as_posix())
             fp.write(_file_block(idx, fi['path'], fi['rel'],
                                  fi['size'], fi['binary'], max_bytes))
 
-    # 规划分块
     chunks = []
     if need_split:
         part_reserve = 400
@@ -280,16 +744,12 @@ def generate_markdown(
         if len(chunks) <= 1:
             need_split = False
 
-    # ========== 单文件模式 ==========
     if not need_split:
         with open(out_path, 'w', encoding='utf-8', newline='\n') as fp:
             _write_single(fp)
-        return {
-            'files': total, 'dirs': dir_count,
-            'output': str(out_path), 'parts': [], 'split': False,
-        }
+        return {'files': total, 'dirs': dir_count,
+                'output': str(out_path), 'parts': [], 'split': False}
 
-    # ========== 拆分模式 ==========
     n_parts = len(chunks)
     width = max(2, len(str(n_parts)))
     for part_idx, (start, end) in enumerate(chunks, 1):
@@ -301,58 +761,50 @@ def generate_markdown(
         part_files = file_info[start:end]
 
         with open(part_path, 'w', encoding='utf-8', newline='\n') as fp:
-            fp.write(f"# {root_dir.name} - 第 {part_idx}/{n_parts} 部分\n\n")
-            fp.write(f"- 母文件：[`{out_path.name}`](./{out_path.name})\n")
-            fp.write(f"- 覆盖文件序号：{start + 1} - {end}\n")
-            fp.write(f"- 本部分文件数：{len(part_files)}\n\n---\n\n")
+            fp.write(f"# {root_dir.name} - part {part_idx}/{n_parts}\n\n")
+            fp.write(f"- mother: [`{out_path.name}`](./{out_path.name})\n")
+            fp.write(f"- range: {start + 1} - {end}\n")
+            fp.write(f"- count: {len(part_files)}\n\n---\n\n")
             for local_i, fi in enumerate(part_files):
                 global_idx = start + local_i + 1
                 if cancel_event and cancel_event.is_set():
-                    fp.write("\n> ⚠️ 用户已取消导出，以下内容不完整。\n")
+                    fp.write("\n> cancelled\n")
                     break
                 if progress_cb:
                     progress_cb(global_idx, total, fi['rel'].as_posix())
                 fp.write(_file_block(global_idx, fi['path'], fi['rel'],
                                      fi['size'], fi['binary'], max_bytes))
 
-        part_meta.append({
-            'name': part_name, 'start': start + 1, 'end': end,
-            'count': len(part_files),
-        })
+        part_meta.append({'name': part_name, 'start': start + 1, 'end': end,
+                          'count': len(part_files)})
 
-    # 母文件
     with open(out_path, 'w', encoding='utf-8', newline='\n') as fp:
         fp.write(header_text)
-        fp.write("---\n\n## 一、目录结构\n\n```\n")
+        fp.write("---\n\n## 1. Tree\n\n```\n")
         fp.write(tree_text)
-        fp.write("\n```\n\n---\n\n## 二、文件内容索引\n\n")
-        fp.write(f"由于内容超过拆分阈值（{split_size_mb} MB），"
-                 f"已拆分为 **{n_parts}** 个子文件：\n\n")
-        fp.write("| 子文件 | 覆盖文件序号 | 文件数 | 链接 |\n")
+        fp.write("\n```\n\n---\n\n## 2. Index\n\n")
+        fp.write(f"Content exceeded split threshold ({split_size_mb} MB), "
+                 f"split into **{n_parts}** parts:\n\n")
+        fp.write("| Part | Range | Count | Link |\n")
         fp.write("|:---|:---|---:|:---|\n")
         for m in part_meta:
             fp.write(f"| `{m['name']}` | {m['start']} - {m['end']} "
-                     f"| {m['count']} | [打开](./{m['name']}) |\n")
-        fp.write("\n> 提示：本母文件包含目录结构与索引，"
-                 "具体文件内容请点击上表链接查看。\n")
+                     f"| {m['count']} | [Open](./{m['name']}) |\n")
+        fp.write("\n> This mother file contains tree & index. "
+                 "See links above for actual contents.\n")
 
-    return {
-        'files': total, 'dirs': dir_count,
-        'output': str(out_path),
-        'parts': [str(p) for p in parts_written],
-        'split': True,
-    }
+    return {'files': total, 'dirs': dir_count, 'output': str(out_path),
+            'parts': [str(p) for p in parts_written], 'split': True}
 
 
-# ==================== 还原：解析 ====================
+# ==================== 还原 ====================
 HEADER_RE = re.compile(r'^###\s+\d+\.\s+`(.+?)`\s*$')
 FENCE_RE = re.compile(r'^(`{3,})(\w*)\s*$')
-ENC_RE = re.compile(r'<!--\s*文件编码：\s*(.+?)\s*-->')
+ENC_RE = re.compile(r'<!--\s*(?:encoding|文件编码)[:：]\s*(.+?)\s*-->')
 PART_REF_RE = re.compile(r'\|\s*`([^`]+?\.md)`\s*\|')
 
 
 def parse_markdown_text(text: str):
-    """从 Markdown 文本里提取所有文件块。yield (rel_path, content_or_None, encoding)"""
     lines = text.split('\n')
     n = len(lines)
     i = 0
@@ -366,7 +818,6 @@ def parse_markdown_text(text: str):
         encoding = 'utf-8'
         no_content = False
 
-        # 读取元数据区，直到遇到围栏 / 说明 / 下一个块
         while i < n:
             line = lines[i]
             if HEADER_RE.match(line):
@@ -407,12 +858,11 @@ def parse_markdown_text(text: str):
             buf.append(lines[i])
             i += 1
         if i < n:
-            i += 1  # 跳过闭围栏
+            i += 1
         yield rel_path, '\n'.join(buf), encoding
 
 
 def discover_parts(md_path: Path):
-    """若给定 md 是母文件，返回同目录下所有被引用的子文件路径"""
     try:
         text = md_path.read_text(encoding='utf-8')
     except Exception:
@@ -433,44 +883,40 @@ def discover_parts(md_path: Path):
 
 
 def safe_join(base: Path, rel: str) -> Path:
-    """防止路径穿越，返回绝对路径"""
     rel_norm = rel.replace('\\', '/').strip()
     if not rel_norm:
-        raise ValueError("空路径")
+        raise ValueError("empty path")
     p = Path(rel_norm)
     if p.is_absolute():
-        raise ValueError(f"绝对路径不允许：{rel}")
+        raise ValueError(f"absolute path not allowed: {rel}")
     clean_parts = []
     for part in p.parts:
         if part in ('', '.'):
             continue
         if part == '..':
-            raise ValueError(f"不允许相对路径穿越：{rel}")
-        # Windows 保留字
+            raise ValueError(f"path traversal not allowed: {rel}")
         if os.name == 'nt' and re.match(r'^(CON|PRN|AUX|NUL|COM\d|LPT\d)$',
                                         part, re.IGNORECASE):
             clean_parts.append('_' + part)
         else:
             clean_parts.append(part)
     if not clean_parts:
-        raise ValueError(f"无效路径：{rel}")
+        raise ValueError(f"invalid path: {rel}")
     target = (base.joinpath(*clean_parts)).resolve()
     base_res = base.resolve()
     try:
         target.relative_to(base_res)
     except ValueError:
-        raise ValueError(f"路径越界：{rel}")
+        raise ValueError(f"path escapes base: {rel}")
     return target
 
 
 def restore_from_md(md_paths, target_dir: Path,
-                    auto_discover_parts: bool = True,
+                    auto_discover_parts=True,
                     progress_cb=None, cancel_event=None) -> dict:
-    """把 md 文件还原为文件夹"""
     target_dir = Path(target_dir).resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # 展开：用户选的母文件 → 自动补充子文件
     expanded = []
     seen_paths = set()
     for mp in md_paths:
@@ -486,14 +932,13 @@ def restore_from_md(md_paths, target_dir: Path,
                     seen_paths.add(sub)
                     expanded.append(sub)
 
-    # 汇总所有块
     entries = []
     errors = []
     for mp in expanded:
         try:
             text = mp.read_text(encoding='utf-8')
         except Exception as e:
-            errors.append(f"读取 {mp} 失败：{e}")
+            errors.append(f"read {mp} failed: {e}")
             continue
         for rel, content, enc in parse_markdown_text(text):
             entries.append((rel, content, enc, mp.name))
@@ -510,7 +955,7 @@ def restore_from_md(md_paths, target_dir: Path,
         try:
             target = safe_join(target_dir, rel)
         except ValueError as e:
-            skipped.append(f"{rel}（{e}）")
+            skipped.append(f"{rel} ({e})")
             continue
 
         try:
@@ -525,17 +970,14 @@ def restore_from_md(md_paths, target_dir: Path,
                     target.write_text(content, encoding='utf-8')
             written += 1
         except Exception as e:
-            skipped.append(f"{rel}（写入失败：{e}）")
+            skipped.append(f"{rel} (write failed: {e})")
 
-    return {
-        'written': written, 'total': total,
-        'target': str(target_dir),
-        'files_scanned': [str(p) for p in expanded],
-        'skipped': skipped, 'errors': errors,
-    }
+    return {'written': written, 'total': total, 'target': str(target_dir),
+            'files_scanned': [str(p) for p in expanded],
+            'skipped': skipped, 'errors': errors}
 
 
-# ==================== AI 规范文件 ====================
+# ==================== AI 规范文件（保持中文版） ====================
 AI_GUIDE_MD = r'''# 文件夹 Markdown 格式规范（供 AI 参考）
 
 本文件规范一种 Markdown 格式，用于描述一个文件夹的完整内容。
@@ -631,6 +1073,8 @@ myproject/
 ```markdown
 <!-- 文件编码：gbk -->
 ```
+
+也兼容英文写法：`<!-- encoding: gbk -->`
 
 ### 4.4 内容（强制）
 
@@ -803,40 +1247,38 @@ class ExportTab(ttk.Frame):
         self._build()
 
     def _build(self):
-        row = ttk.Frame(self)
-        row.pack(fill='x', pady=4)
-        ttk.Label(row, text="目标文件夹：").pack(side='left')
+        row = ttk.Frame(self); row.pack(fill='x', pady=4)
+        ttk.Label(row, text=tr('lbl_target_folder')).pack(side='left')
         ttk.Entry(row, textvariable=self.folder_var).pack(
             side='left', fill='x', expand=True, padx=6)
-        ttk.Button(row, text="选择…", command=self.choose_folder).pack(side='left')
+        ttk.Button(row, text=tr('btn_choose'),
+                   command=self.choose_folder).pack(side='left')
 
-        opts = ttk.LabelFrame(self, text="选项", padding=10)
+        opts = ttk.LabelFrame(self, text=tr('frame_options'), padding=10)
         opts.pack(fill='x', pady=6)
-        ttk.Checkbutton(
-            opts, text="包含隐藏文件 / 文件夹（以 . 开头）",
-            variable=self.include_hidden_var,
-        ).pack(anchor='w')
+        ttk.Checkbutton(opts, text=tr('chk_include_hidden'),
+                        variable=self.include_hidden_var).pack(anchor='w')
         r1 = ttk.Frame(opts); r1.pack(fill='x', pady=(8, 0))
-        ttk.Label(r1, text="单文件内容大小上限（MB，0 = 不限制）：").pack(side='left')
+        ttk.Label(r1, text=tr('lbl_max_size')).pack(side='left')
         ttk.Entry(r1, textvariable=self.max_size_var, width=8).pack(side='left', padx=6)
         r2 = ttk.Frame(opts); r2.pack(fill='x', pady=(6, 0))
-        ttk.Label(r2, text="拆分阈值（MB，0 = 不拆分）：").pack(side='left')
+        ttk.Label(r2, text=tr('lbl_split_size')).pack(side='left')
         ttk.Entry(r2, textvariable=self.split_size_var, width=8).pack(side='left', padx=6)
-        ttk.Label(r2, text="超过阈值时生成母文件 + 若干子文件",
-                  foreground="#666").pack(side='left', padx=6)
+        ttk.Label(r2, text=tr('lbl_split_hint'), foreground="#666").pack(side='left', padx=6)
 
         btn_row = ttk.Frame(self); btn_row.pack(fill='x', pady=6)
-        self.start_btn = ttk.Button(btn_row, text="开始导出", command=self.start)
+        self.start_btn = ttk.Button(btn_row, text=tr('btn_start_export'),
+                                    command=self.start)
         self.start_btn.pack(side='left')
-        self.cancel_btn = ttk.Button(btn_row, text="取消",
+        self.cancel_btn = ttk.Button(btn_row, text=tr('btn_cancel'),
                                      command=self.cancel, state='disabled')
         self.cancel_btn.pack(side='left', padx=6)
 
-        prog = ttk.LabelFrame(self, text="进度", padding=10)
+        prog = ttk.LabelFrame(self, text=tr('frame_progress'), padding=10)
         prog.pack(fill='both', expand=True, pady=6)
         self.progress = ttk.Progressbar(prog, mode='determinate')
         self.progress.pack(fill='x')
-        self.status_var = tk.StringVar(value="就绪")
+        self.status_var = tk.StringVar(value=tr('status_ready'))
         ttk.Label(prog, textvariable=self.status_var,
                   wraplength=620, justify='left').pack(fill='x', pady=(8, 0))
         log_frame = ttk.Frame(prog); log_frame.pack(fill='both', expand=True, pady=(8, 0))
@@ -847,7 +1289,7 @@ class ExportTab(ttk.Frame):
         self.log.configure(yscrollcommand=sb.set, state='disabled')
 
     def choose_folder(self):
-        p = filedialog.askdirectory(title="选择要导出的文件夹")
+        p = filedialog.askdirectory(title=tr('lbl_target_folder'))
         if p:
             self.folder_var.set(p)
 
@@ -869,21 +1311,21 @@ class ExportTab(ttk.Frame):
     def start(self):
         folder = self.folder_var.get().strip()
         if not folder:
-            messagebox.showwarning("提示", "请先选择目标文件夹。"); return
+            messagebox.showwarning(tr('warn_title'), tr('warn_no_folder')); return
         root_path = Path(folder)
         if not root_path.is_dir():
-            messagebox.showerror("错误", "所选路径不是有效文件夹。"); return
+            messagebox.showerror(tr('err_title'), tr('err_invalid_folder')); return
         try:
             max_mb = self._parse_float(self.max_size_var.get(), 10.0)
             split_mb = self._parse_float(self.split_size_var.get(), 0.0)
         except ValueError:
-            messagebox.showerror("错误", "大小参数必须是 ≥ 0 的数字。"); return
+            messagebox.showerror(tr('err_title'), tr('err_size_param')); return
 
         out_path = filedialog.asksaveasfilename(
-            title="保存母文件（Markdown）",
+            title=tr('dlg_save_mother_title'),
             defaultextension=".md",
             initialfile=f"{root_path.name}_export.md",
-            filetypes=[("Markdown 文件", "*.md"), ("所有文件", "*.*")],
+            filetypes=[(tr('ft_md'), "*.md"), (tr('ft_all'), "*.*")],
         )
         if not out_path:
             return
@@ -924,7 +1366,7 @@ class ExportTab(ttk.Frame):
 
     def _update_progress(self, cur, total, name, pct):
         self.progress.configure(value=pct)
-        self.status_var.set(f"[{cur}/{total}] {name}")
+        self.status_var.set(tr('status_progress', cur=cur, total=total, name=name))
         if cur == 1 or cur == total or cur % 20 == 0:
             self.log_write(f"[{cur}/{total}] {name}")
 
@@ -933,33 +1375,33 @@ class ExportTab(ttk.Frame):
         self.cancel_btn.configure(state='disabled')
         self.progress.configure(value=100)
         if r['split']:
-            self.status_var.set(
-                f"完成：{r['files']} 个文件 / {r['dirs']} 个文件夹，"
-                f"拆分为 {len(r['parts'])} 个子文件")
-            self.log_write(f"✅ 母文件：{r['output']}")
+            self.status_var.set(tr('status_done_split',
+                                   files=r['files'], dirs=r['dirs'],
+                                   parts=len(r['parts'])))
+            self.log_write(tr('log_mother_file', path=r['output']))
             for p in r['parts']:
-                self.log_write(f"   ├─ {p}")
-            messagebox.showinfo("完成",
-                f"导出完成（已拆分）！\n\n文件数：{r['files']}\n"
-                f"文件夹数：{r['dirs']}\n子文件数：{len(r['parts'])}\n\n"
-                f"母文件：\n{r['output']}")
+                self.log_write(tr('log_branch', path=p))
+            messagebox.showinfo(tr('info_done_title'),
+                tr('info_export_done_split',
+                   files=r['files'], dirs=r['dirs'],
+                   parts=len(r['parts']), path=r['output']))
         else:
-            self.status_var.set(f"完成：{r['files']} 个文件，{r['dirs']} 个文件夹")
-            self.log_write(f"✅ 已导出到：{r['output']}")
-            messagebox.showinfo("完成",
-                f"导出完成！\n\n文件数：{r['files']}\n"
-                f"文件夹数：{r['dirs']}\n\n输出文件：\n{r['output']}")
+            self.status_var.set(tr('status_done', files=r['files'], dirs=r['dirs']))
+            self.log_write(tr('log_exported_to', path=r['output']))
+            messagebox.showinfo(tr('info_done_title'),
+                tr('info_export_done', files=r['files'], dirs=r['dirs'],
+                   path=r['output']))
 
     def _error(self, e, err):
         self.start_btn.configure(state='normal')
         self.cancel_btn.configure(state='disabled')
-        self.status_var.set("发生错误")
+        self.status_var.set(tr('status_error'))
         self.log_write(err)
-        messagebox.showerror("错误", f"导出失败：{e}")
+        messagebox.showerror(tr('err_title'), tr('err_export_failed', err=e))
 
     def cancel(self):
         self.cancel_event.set()
-        self.status_var.set("正在取消…")
+        self.status_var.set(tr('status_cancelling'))
 
 
 class RestoreTab(ttk.Frame):
@@ -972,21 +1414,20 @@ class RestoreTab(ttk.Frame):
         self._build()
 
     def _build(self):
-        info = ttk.Label(
-            self,
-            text="选择由本工具导出的 Markdown 文件（可多选）。"
-                 "若选择母文件，将自动发现同目录下的所有子文件。",
-            foreground="#555", wraplength=680, justify='left',
-        )
-        info.pack(fill='x', pady=(0, 8))
+        ttk.Label(self, text=tr('lbl_restore_info'),
+                  foreground="#555", wraplength=680,
+                  justify='left').pack(fill='x', pady=(0, 8))
 
         row = ttk.Frame(self); row.pack(fill='x', pady=4)
-        ttk.Button(row, text="选择 md 文件…", command=self.choose_md).pack(side='left')
-        ttk.Button(row, text="清空列表", command=self.clear_md).pack(side='left', padx=6)
-        self.count_var = tk.StringVar(value="已选 0 个文件")
-        ttk.Label(row, textvariable=self.count_var, foreground="#666").pack(side='left', padx=8)
+        ttk.Button(row, text=tr('btn_choose_md'),
+                   command=self.choose_md).pack(side='left')
+        ttk.Button(row, text=tr('btn_clear_list'),
+                   command=self.clear_md).pack(side='left', padx=6)
+        self.count_var = tk.StringVar(value=tr('lbl_selected_count', n=0))
+        ttk.Label(row, textvariable=self.count_var,
+                  foreground="#666").pack(side='left', padx=8)
 
-        list_frame = ttk.LabelFrame(self, text="已选文件", padding=8)
+        list_frame = ttk.LabelFrame(self, text=tr('frame_selected_files'), padding=8)
         list_frame.pack(fill='both', expand=True, pady=6)
         self.file_list = tk.Listbox(list_frame, height=6)
         self.file_list.pack(side='left', fill='both', expand=True)
@@ -995,28 +1436,28 @@ class RestoreTab(ttk.Frame):
         self.file_list.configure(yscrollcommand=sb.set)
 
         row2 = ttk.Frame(self); row2.pack(fill='x', pady=6)
-        ttk.Label(row2, text="还原到文件夹：").pack(side='left')
+        ttk.Label(row2, text=tr('lbl_restore_to')).pack(side='left')
         ttk.Entry(row2, textvariable=self.target_var).pack(
             side='left', fill='x', expand=True, padx=6)
-        ttk.Button(row2, text="选择…", command=self.choose_target).pack(side='left')
+        ttk.Button(row2, text=tr('btn_choose'),
+                   command=self.choose_target).pack(side='left')
 
-        ttk.Checkbutton(
-            self, text="自动发现同目录下的子文件（母文件拆分场景）",
-            variable=self.auto_parts_var,
-        ).pack(anchor='w', pady=4)
+        ttk.Checkbutton(self, text=tr('chk_auto_discover'),
+                        variable=self.auto_parts_var).pack(anchor='w', pady=4)
 
         btn_row = ttk.Frame(self); btn_row.pack(fill='x', pady=6)
-        self.start_btn = ttk.Button(btn_row, text="开始还原", command=self.start)
+        self.start_btn = ttk.Button(btn_row, text=tr('btn_start_restore'),
+                                    command=self.start)
         self.start_btn.pack(side='left')
-        self.cancel_btn = ttk.Button(btn_row, text="取消",
+        self.cancel_btn = ttk.Button(btn_row, text=tr('btn_cancel'),
                                      command=self.cancel, state='disabled')
         self.cancel_btn.pack(side='left', padx=6)
 
-        prog = ttk.LabelFrame(self, text="进度", padding=10)
+        prog = ttk.LabelFrame(self, text=tr('frame_progress'), padding=10)
         prog.pack(fill='both', expand=True, pady=6)
         self.progress = ttk.Progressbar(prog, mode='determinate')
         self.progress.pack(fill='x')
-        self.status_var = tk.StringVar(value="就绪")
+        self.status_var = tk.StringVar(value=tr('status_ready'))
         ttk.Label(prog, textvariable=self.status_var,
                   wraplength=620, justify='left').pack(fill='x', pady=(8, 0))
         log_frame = ttk.Frame(prog); log_frame.pack(fill='both', expand=True, pady=(8, 0))
@@ -1028,8 +1469,8 @@ class RestoreTab(ttk.Frame):
 
     def choose_md(self):
         paths = filedialog.askopenfilenames(
-            title="选择要还原的 md 文件",
-            filetypes=[("Markdown 文件", "*.md"), ("所有文件", "*.*")],
+            title=tr('dlg_choose_md_title'),
+            filetypes=[(tr('ft_md'), "*.md"), (tr('ft_all'), "*.*")],
         )
         if paths:
             for p in paths:
@@ -1045,10 +1486,10 @@ class RestoreTab(ttk.Frame):
         self.file_list.delete(0, 'end')
         for p in self.md_paths:
             self.file_list.insert('end', p)
-        self.count_var.set(f"已选 {len(self.md_paths)} 个文件")
+        self.count_var.set(tr('lbl_selected_count', n=len(self.md_paths)))
 
     def choose_target(self):
-        p = filedialog.askdirectory(title="选择还原到的文件夹")
+        p = filedialog.askdirectory(title=tr('dlg_choose_target_title'))
         if p:
             self.target_var.set(p)
 
@@ -1060,18 +1501,15 @@ class RestoreTab(ttk.Frame):
 
     def start(self):
         if not self.md_paths:
-            messagebox.showwarning("提示", "请先选择要还原的 md 文件。"); return
+            messagebox.showwarning(tr('warn_title'), tr('warn_no_md')); return
         target = self.target_var.get().strip()
         if not target:
-            messagebox.showwarning("提示", "请选择还原到的目标文件夹。"); return
+            messagebox.showwarning(tr('warn_title'), tr('warn_no_target')); return
         target_path = Path(target)
         target_path.mkdir(parents=True, exist_ok=True)
 
-        if not messagebox.askyesno(
-            "确认",
-            f"将把 md 文件内容还原到：\n{target_path}\n\n"
-            f"同名文件会被覆盖，是否继续？"
-        ):
+        if not messagebox.askyesno(tr('confirm_title'),
+                                   tr('confirm_overwrite', path=target_path)):
             return
 
         self.start_btn.configure(state='disabled')
@@ -1108,7 +1546,7 @@ class RestoreTab(ttk.Frame):
 
     def _update_progress(self, cur, total, name, pct):
         self.progress.configure(value=pct)
-        self.status_var.set(f"[{cur}/{total}] {name}")
+        self.status_var.set(tr('status_progress', cur=cur, total=total, name=name))
         if cur == 1 or cur == total or cur % 20 == 0:
             self.log_write(f"[{cur}/{total}] {name}")
 
@@ -1116,73 +1554,100 @@ class RestoreTab(ttk.Frame):
         self.start_btn.configure(state='normal')
         self.cancel_btn.configure(state='disabled')
         self.progress.configure(value=100)
-        self.status_var.set(f"完成：写入 {r['written']} / {r['total']} 个文件")
-        self.log_write(f"✅ 还原目标：{r['target']}")
-        self.log_write(f"   参与解析的 md 文件：")
+        self.status_var.set(tr('status_done_restore',
+                               written=r['written'], total=r['total']))
+        self.log_write(tr('log_restore_target', path=r['target']))
+        self.log_write(tr('log_scanned_md'))
         for p in r['files_scanned']:
-            self.log_write(f"   ├─ {p}")
+            self.log_write(tr('log_branch', path=p))
         if r['errors']:
             for e in r['errors']:
-                self.log_write(f"⚠ {e}")
+                self.log_write(tr('log_warn', msg=e))
         if r['skipped']:
             for s in r['skipped']:
-                self.log_write(f"⚠ 跳过：{s}")
-        messagebox.showinfo(
-            "完成",
-            f"还原完成！\n\n目标文件夹：\n{r['target']}\n\n"
-            f"写入文件数：{r['written']} / {r['total']}\n"
-            f"扫描 md 文件：{len(r['files_scanned'])} 个"
-            + (f"\n跳过：{len(r['skipped'])} 项" if r['skipped'] else ""),
-        )
+                self.log_write(tr('log_skip', msg=s))
+
+        skip_text = tr('skip_suffix', n=len(r['skipped'])) if r['skipped'] else ''
+        messagebox.showinfo(tr('info_done_title'),
+            tr('info_restore_done',
+               path=r['target'], written=r['written'], total=r['total'],
+               scanned=len(r['files_scanned']), skip=skip_text))
 
     def _error(self, e, err):
         self.start_btn.configure(state='normal')
         self.cancel_btn.configure(state='disabled')
-        self.status_var.set("发生错误")
+        self.status_var.set(tr('status_error'))
         self.log_write(err)
-        messagebox.showerror("错误", f"还原失败：{e}")
+        messagebox.showerror(tr('err_title'), tr('err_restore_failed', err=e))
 
     def cancel(self):
         self.cancel_event.set()
-        self.status_var.set("正在取消…")
+        self.status_var.set(tr('status_cancelling'))
 
 
 class App:
     def __init__(self, root: tk.Tk):
         self.root = root
-        root.title("文件夹 <-> Markdown 互转工具")
-        root.geometry("760x660")
-        root.minsize(660, 560)
+        self._build()
 
-        # 顶部工具条
-        toolbar = ttk.Frame(root, padding=(12, 8, 12, 0))
+    def _build(self):
+        # 清空旧内容（语言切换时重建）
+        for w in self.root.winfo_children():
+            w.destroy()
+
+        self.root.title(tr('app_title'))
+        self.root.geometry("780x700")
+        self.root.minsize(680, 600)
+
+        # 顶部工具条：语言 + AI 规范
+        toolbar = ttk.Frame(self.root, padding=(12, 8, 12, 0))
         toolbar.pack(fill='x')
-        ttk.Button(toolbar, text="生成 AI 规范文件（指导其他 AI 输出格式）",
+
+        ttk.Label(toolbar, text=tr('lang_label')).pack(side='left')
+        self.lang_var = tk.StringVar(value=LABEL_BY_LANG[CURRENT_LANG])
+        self.lang_combo = ttk.Combobox(
+            toolbar, textvariable=self.lang_var,
+            values=[label for _, label in LANGS],
+            state='readonly', width=14,
+        )
+        self.lang_combo.pack(side='left', padx=6)
+        self.lang_combo.bind('<<ComboboxSelected>>', self._on_lang_change)
+
+        ttk.Button(toolbar, text=tr('btn_gen_ai_guide'),
                    command=self.save_ai_guide).pack(side='right')
 
-        nb = ttk.Notebook(root)
+        # 标签页
+        nb = ttk.Notebook(self.root)
         nb.pack(fill='both', expand=True, padx=8, pady=8)
         self.export_tab = ExportTab(nb)
         self.restore_tab = RestoreTab(nb)
-        nb.add(self.export_tab, text="  导出（文件夹 → Markdown）  ")
-        nb.add(self.restore_tab, text="  还原（Markdown → 文件夹）  ")
+        nb.add(self.export_tab, text=tr('tab_export'))
+        nb.add(self.restore_tab, text=tr('tab_restore'))
+
+    def _on_lang_change(self, event=None):
+        global CURRENT_LANG
+        label = self.lang_combo.get()
+        code = LANG_BY_LABEL.get(label)
+        if code and code != CURRENT_LANG:
+            CURRENT_LANG = code
+            self._build()
 
     def save_ai_guide(self):
         out = filedialog.asksaveasfilename(
-            title="保存 AI 规范文件",
+            title=tr('dlg_save_guide_title'),
             defaultextension=".md",
-            initialfile="AI输出规范_文件夹Markdown格式.md",
-            filetypes=[("Markdown 文件", "*.md"), ("所有文件", "*.*")],
+            initialfile=tr('default_guide_filename'),
+            filetypes=[(tr('ft_md'), "*.md"), (tr('ft_all'), "*.*")],
         )
         if not out:
             return
         try:
             Path(out).write_text(AI_GUIDE_MD, encoding='utf-8')
-            messagebox.showinfo("完成",
-                f"AI 规范文件已保存：\n{out}\n\n"
-                "把它发给其他 AI，它们就能按格式输出可还原的 Markdown。")
+            messagebox.showinfo(tr('info_done_title'),
+                                tr('info_guide_saved', path=out))
         except Exception as e:
-            messagebox.showerror("错误", f"保存失败：{e}")
+            messagebox.showerror(tr('err_title'),
+                                 tr('err_guide_save_failed', err=e))
 
 
 def main():
